@@ -1,0 +1,274 @@
+src/visual.ts(408,13): error TS1005: '>' expected.
+src/visual.ts(408,18): error TS1005: ';' expected.
+src/visual.ts(408,58): error TS1005: ';' expected.
+src/visual.ts(408,69): error TS1110: Type expected.
+src/visual.ts(409,13): error TS1434: Unexpected keyword or identifier.
+src/visual.ts(410,14): error TS1005: '>' expected.
+src/visual.ts(410,19): error TS1005: ';' expected.
+src/visual.ts(411,18): error TS1005: '>' expected.
+src/visual.ts(411,23): error TS1005: ';' expected.
+src/visual.ts(412,22): error TS1005: '>' expected.
+src/visual.ts(412,27): error TS1005: ';' expected.
+src/visual.ts(413,28): error TS1005: '>' expected.
+src/visual.ts(413,33): error TS1005: ';' expected.
+src/visual.ts(413,107): error TS1005: ';' expected.
+src/visual.ts(413,110): error TS1110: Type expected.
+src/visual.ts(414,33): error TS1005: ';' expected.
+src/visual.ts(414,47): error TS1005: ';' expected.
+src/visual.ts(414,63): error TS1005: ';' expected.
+src/visual.ts(414,88): error TS1005: ';' expected.
+src/visual.ts(414,159): error TS1005: ';' expected.
+src/visual.ts(415,30): error TS1110: Type expected.
+src/visual.ts(416,35): error TS1005: ';' expected.
+src/visual.ts(416,57): error TS1005: ';' expected.
+src/visual.ts(417,40): error TS1005: '>' expected.
+src/visual.ts(417,45): error TS1005: ';' expected.
+src/visual.ts(417,122): error TS1005: ';' expected.
+src/visual.ts(417,125): error TS1110: Type expected.
+src/visual.ts(418,45): error TS1005: ';' expected.
+src/visual.ts(418,59): error TS1005: ';' expected.
+src/visual.ts(418,78): error TS1005: ';' expected.
+src/visual.ts(418,106): error TS1005: ';' expected.
+src/visual.ts(418,177): error TS1005: ';' expected.
+src/visual.ts(418,268): error TS1005: ';' expected.
+src/visual.ts(419,46): error TS1005: '>' expected.
+src/visual.ts(419,48): error TS1005: ';' expected.
+src/visual.ts(419,68): error TS1005: ';' expected.
+src/visual.ts(419,219): error TS1110: Type expected.
+src/visual.ts(420,46): error TS1161: Unterminated regular expression literal.
+src/visual.ts(421,51): error TS1005: ';' expected.
+src/visual.ts(422,56): error TS1005: '>' expected.
+src/visual.ts(422,61): error TS1005: ';' expected.
+src/visual.ts(422,137): error TS1005: ';' expected.
+src/visual.ts(422,140): error TS1110: Type expected.
+src/visual.ts(423,59): error TS1005: ';' expected.
+src/visual.ts(424,65): error TS1005: '>' expected.
+src/visual.ts(424,67): error TS1005: ';' expected.
+src/visual.ts(424,78): error TS1005: ';' expected.
+src/visual.ts(424,83): error TS1005: '{' expected.
+src/visual.ts(424,109): error TS1005: ';' expected.
+src/visual.ts(424,124): error TS1005: ';' expected.
+src/visual.ts(424,248): error TS1161: Unterminated regular expression literal.
+src/visual.ts(425,70): error TS1005: ';' expected.
+src/visual.ts(425,87): error TS1005: ';' expected.
+src/visual.ts(425,92): error TS1005: '{' expected.
+src/visual.ts(425,120): error TS1005: ';' expected.
+src/visual.ts(425,137): error TS1005: ';' expected.
+src/visual.ts(425,262): error TS1161: Unterminated regular expression literal.
+src/visual.ts(426,74): error TS1005: ';' expected.
+src/visual.ts(426,94): error TS1005: ';' expected.
+src/visual.ts(426,99): error TS1005: '{' expected.
+src/visual.ts(426,130): error TS1005: ';' expected.
+src/visual.ts(426,150): error TS1005: ';' expected.
+src/visual.ts(426,283): error TS1161: Unterminated regular expression literal.
+src/visual.ts(427,78): error TS1005: ';' expected.
+src/visual.ts(427,97): error TS1005: ';' expected.
+src/visual.ts(427,102): error TS1005: '{' expected.
+src/visual.ts(427,132): error TS1005: ';' expected.
+src/visual.ts(427,151): error TS1005: ';' expected.
+src/visual.ts(427,284): error TS1161: Unterminated regular expression literal.
+src/visual.ts(428,79): error TS1005: ';' expected.
+src/visual.ts(428,144): error TS1110: Type expected.
+src/visual.ts(429,86): error TS1005: ';' expected.
+src/visual.ts(429,103): error TS1005: ';' expected.
+src/visual.ts(429,108): error TS1005: '{' expected.
+src/visual.ts(429,136): error TS1005: ';' expected.
+src/visual.ts(429,158): error TS1005: ';' expected.
+src/visual.ts(429,261): error TS1127: Invalid character.
+src/visual.ts(429,263): error TS1110: Type expected.
+src/visual.ts(430,90): error TS1005: ';' expected.
+src/visual.ts(430,111): error TS1005: ';' expected.
+src/visual.ts(430,116): error TS1005: '{' expected.
+src/visual.ts(430,148): error TS1005: ';' expected.
+src/visual.ts(430,169): error TS1005: ';' expected.
+src/visual.ts(430,272): error TS1109: Expression expected.
+src/visual.ts(430,275): error TS1110: Type expected.
+src/visual.ts(431,91): error TS1005: ';' expected.
+src/visual.ts(431,156): error TS1110: Type expected.
+src/visual.ts(432,97): error TS1005: ';' expected.
+src/visual.ts(432,112): error TS1005: ';' expected.
+src/visual.ts(432,130): error TS1005: ';' expected.
+src/visual.ts(432,153): error TS1005: ';' expected.
+src/visual.ts(432,174): error TS1005: ';' expected.
+src/visual.ts(433,94): error TS1110: Type expected.
+src/visual.ts(434,94): error TS1161: Unterminated regular expression literal.
+src/visual.ts(435,94): error TS1161: Unterminated regular expression literal.
+src/visual.ts(436,99): error TS1005: ';' expected.
+src/visual.ts(436,127): error TS1005: ';' expected.
+src/visual.ts(437,102): error TS1005: '>' expected.
+src/visual.ts(437,107): error TS1005: ';' expected.
+src/visual.ts(437,172): error TS1005: ';' expected.
+src/visual.ts(437,175): error TS1110: Type expected.
+src/visual.ts(438,107): error TS1005: ';' expected.
+src/visual.ts(438,130): error TS1005: ';' expected.
+src/visual.ts(438,198): error TS1110: Type expected.
+src/visual.ts(439,111): error TS1005: ';' expected.
+src/visual.ts(439,180): error TS1005: ';' expected.
+src/visual.ts(439,183): error TS1110: Type expected.
+src/visual.ts(440,115): error TS1005: ';' expected.
+src/visual.ts(440,135): error TS1005: ';' expected.
+src/visual.ts(440,218): error TS1110: Type expected.
+src/visual.ts(441,114): error TS1161: Unterminated regular expression literal.
+src/visual.ts(442,114): error TS1161: Unterminated regular expression literal.
+src/visual.ts(443,119): error TS1005: ';' expected.
+src/visual.ts(444,125): error TS1005: '>' expected.
+src/visual.ts(444,127): error TS1005: ';' expected.
+src/visual.ts(444,140): error TS1005: ';' expected.
+src/visual.ts(444,225): error TS1161: Unterminated regular expression literal.
+src/visual.ts(445,130): error TS1005: ';' expected.
+src/visual.ts(445,145): error TS1005: ';' expected.
+src/visual.ts(445,248): error TS1005: ';' expected.
+src/visual.ts(445,261): error TS1110: Type expected.
+src/visual.ts(446,126): error TS1161: Unterminated regular expression literal.
+src/visual.ts(468,49): error TS1005: ';' expected.
+src/visual.ts(485,48): error TS1005: ';' expected.
+src/visual.ts(513,32): error TS1005: ';' expected.
+src/visual.ts(513,75): error TS1005: ';' expected.
+src/visual.ts(513,87): error TS1005: ';' expected.
+src/visual.ts(513,98): error TS1005: ';' expected.
+src/visual.ts(513,105): error TS1110: Type expected.
+src/visual.ts(514,21): error TS1128: Declaration or statement expected.
+src/visual.ts(514,22): error TS1128: Declaration or statement expected.
+src/visual.ts(530,7): error TS1068: Unexpected token. A constructor, method, accessor, or property was expected.
+src/visual.ts(530,12): error TS1068: Unexpected token. A constructor, method, accessor, or property was expected.
+src/visual.ts(533,13): error TS1128: Declaration or statement expected.
+src/visual.ts(533,15): error TS1128: Declaration or statement expected.
+src/visual.ts(536,9): error TS1128: Declaration or statement expected.
+src/visual.ts(536,10): error TS1128: Declaration or statement expected.
+src/visual.ts(689,5): error TS1128: Declaration or statement expected.
+src/visual.ts(691,5): error TS1128: Declaration or statement expected.
+src/visual.ts(691,37): error TS1005: ';' expected.
+src/visual.ts(704,5): error TS1128: Declaration or statement expected.
+src/visual.ts(704,31): error TS1005: ',' expected.
+src/visual.ts(704,48): error TS1005: ';' expected.
+src/visual.ts(712,5): error TS1128: Declaration or statement expected.
+src/visual.ts(712,41): error TS1005: ';' expected.
+src/visual.ts(725,5): error TS1128: Declaration or statement expected.
+src/visual.ts(725,25): error TS1005: ',' expected.
+src/visual.ts(725,42): error TS1005: ';' expected.
+src/visual.ts(734,5): error TS1128: Declaration or statement expected.
+src/visual.ts(734,44): error TS1005: ';' expected.
+src/visual.ts(797,5): error TS1128: Declaration or statement expected.
+src/visual.ts(797,42): error TS1005: ',' expected.
+src/visual.ts(797,55): error TS1005: ',' expected.
+src/visual.ts(797,64): error TS1005: ';' expected.
+src/visual.ts(797,85): error TS1005: ';' expected.
+src/visual.ts(830,5): error TS1128: Declaration or statement expected.
+src/visual.ts(830,33): error TS1005: ',' expected.
+src/visual.ts(830,42): error TS1005: ';' expected.
+src/visual.ts(830,63): error TS1005: ';' expected.
+src/visual.ts(844,5): error TS1128: Declaration or statement expected.
+src/visual.ts(844,34): error TS1005: ',' expected.
+src/visual.ts(844,51): error TS1005: ',' expected.
+src/visual.ts(844,60): error TS1005: ';' expected.
+src/visual.ts(844,81): error TS1005: ';' expected.
+src/visual.ts(856,5): error TS1128: Declaration or statement expected.
+src/visual.ts(856,40): error TS1005: ';' expected.
+src/visual.ts(868,5): error TS1128: Declaration or statement expected.
+src/visual.ts(868,37): error TS1005: ',' expected.
+src/visual.ts(868,54): error TS1005: ',' expected.
+src/visual.ts(868,72): error TS1109: Expression expected.
+src/visual.ts(868,95): error TS1005: ';' expected.
+src/visual.ts(874,5): error TS1128: Declaration or statement expected.
+src/visual.ts(874,52): error TS1109: Expression expected.
+src/visual.ts(874,78): error TS1005: ';' expected.
+src/visual.ts(1070,5): error TS1128: Declaration or statement expected.
+src/visual.ts(1070,37): error TS1109: Expression expected.
+src/visual.ts(1070,54): error TS1005: ';' expected.
+src/visual.ts(1094,5): error TS1128: Declaration or statement expected.
+src/visual.ts(1094,34): error TS1005: ',' expected.
+src/visual.ts(1094,51): error TS1005: ',' expected.
+src/visual.ts(1094,69): error TS1109: Expression expected.
+src/visual.ts(1094,104): error TS1109: Expression expected.
+src/visual.ts(1094,121): error TS1005: ';' expected.
+src/visual.ts(1127,5): error TS1128: Declaration or statement expected.
+src/visual.ts(1127,38): error TS1005: ',' expected.
+src/visual.ts(1127,54): error TS1005: ',' expected.
+src/visual.ts(1127,85): error TS1005: ';' expected.
+src/visual.ts(1168,5): error TS1128: Declaration or statement expected.
+src/visual.ts(1168,42): error TS1005: ',' expected.
+src/visual.ts(1168,52): error TS1005: ';' expected.
+src/visual.ts(1192,5): error TS1128: Declaration or statement expected.
+src/visual.ts(1192,27): error TS1005: ';' expected.
+src/visual.ts(1209,5): error TS1128: Declaration or statement expected.
+src/visual.ts(1209,31): error TS1005: ';' expected.
+src/visual.ts(1214,5): error TS1128: Declaration or statement expected.
+src/visual.ts(1214,33): error TS1109: Expression expected.
+src/visual.ts(1214,50): error TS1005: ';' expected.
+src/visual.ts(1235,5): error TS1128: Declaration or statement expected.
+src/visual.ts(1235,26): error TS1005: ',' expected.
+src/visual.ts(1235,49): error TS1005: ';' expected.
+src/visual.ts(1420,5): error TS1128: Declaration or statement expected.
+src/visual.ts(1420,29): error TS1005: ',' expected.
+src/visual.ts(1420,54): error TS1005: ';' expected.
+src/visual.ts(1420,63): error TS1011: An element access expression should take an argument.
+src/visual.ts(1420,65): error TS1005: ';' expected.
+src/visual.ts(1551,5): error TS1128: Declaration or statement expected.
+src/visual.ts(1551,30): error TS1005: ',' expected.
+src/visual.ts(1551,55): error TS1005: ';' expected.
+src/visual.ts(1551,76): error TS1005: ';' expected.
+src/visual.ts(1555,5): error TS1128: Declaration or statement expected.
+src/visual.ts(1555,27): error TS1005: ',' expected.
+src/visual.ts(1555,36): error TS1011: An element access expression should take an argument.
+src/visual.ts(1555,38): error TS1005: ';' expected.
+src/visual.ts(1555,47): error TS1011: An element access expression should take an argument.
+src/visual.ts(1555,49): error TS1005: ';' expected.
+src/visual.ts(1620,5): error TS1128: Declaration or statement expected.
+src/visual.ts(1620,36): error TS1005: ';' expected.
+src/visual.ts(1795,5): error TS1128: Declaration or statement expected.
+src/visual.ts(1795,31): error TS1005: ',' expected.
+src/visual.ts(1795,40): error TS1011: An element access expression should take an argument.
+src/visual.ts(1795,51): error TS1005: ',' expected.
+src/visual.ts(1795,69): error TS1005: ';' expected.
+src/visual.ts(1795,78): error TS1011: An element access expression should take an argument.
+src/visual.ts(1795,80): error TS1005: ';' expected.
+src/visual.ts(1823,5): error TS1128: Declaration or statement expected.
+src/visual.ts(1823,26): error TS1005: ',' expected.
+src/visual.ts(1823,35): error TS1011: An element access expression should take an argument.
+src/visual.ts(1823,37): error TS1005: ';' expected.
+src/visual.ts(1823,46): error TS1011: An element access expression should take an argument.
+src/visual.ts(1823,48): error TS1005: ';' expected.
+src/visual.ts(1865,5): error TS1128: Declaration or statement expected.
+src/visual.ts(1865,32): error TS1109: Expression expected.
+src/visual.ts(1865,48): error TS1005: ';' expected.
+src/visual.ts(1865,50): error TS1434: Unexpected keyword or identifier.
+src/visual.ts(1878,5): error TS1128: Declaration or statement expected.
+src/visual.ts(1878,39): error TS1005: ',' expected.
+src/visual.ts(1878,48): error TS1011: An element access expression should take an argument.
+src/visual.ts(1878,51): error TS1005: ';' expected.
+src/visual.ts(1895,5): error TS1128: Declaration or statement expected.
+src/visual.ts(1895,27): error TS1005: ',' expected.
+src/visual.ts(1895,40): error TS1005: ',' expected.
+src/visual.ts(1895,53): error TS1005: ',' expected.
+src/visual.ts(1895,78): error TS1005: ',' expected.
+src/visual.ts(1895,102): error TS1005: ';' expected.
+src/visual.ts(1895,104): error TS1434: Unexpected keyword or identifier.
+src/visual.ts(2066,5): error TS1128: Declaration or statement expected.
+src/visual.ts(2066,22): error TS1005: ';' expected.
+src/visual.ts(2383,5): error TS1128: Declaration or statement expected.
+src/visual.ts(2383,39): error TS1005: ',' expected.
+src/visual.ts(2383,50): error TS1005: ';' expected.
+src/visual.ts(2501,5): error TS1128: Declaration or statement expected.
+src/visual.ts(2501,32): error TS1005: ';' expected.
+src/visual.ts(2506,5): error TS1128: Declaration or statement expected.
+src/visual.ts(2510,5): error TS1128: Declaration or statement expected.
+src/visual.ts(2510,33): error TS1005: ',' expected.
+src/visual.ts(2510,51): error TS1005: ',' expected.
+src/visual.ts(2510,61): error TS1005: ';' expected.
+src/visual.ts(2549,5): error TS1128: Declaration or statement expected.
+src/visual.ts(2549,27): error TS1005: ',' expected.
+src/visual.ts(2549,41): error TS1005: ';' expected.
+src/visual.ts(2570,5): error TS1128: Declaration or statement expected.
+src/visual.ts(2570,34): error TS1005: ',' expected.
+src/visual.ts(2570,50): error TS1005: ',' expected.
+src/visual.ts(2570,60): error TS1005: ';' expected.
+src/visual.ts(2606,5): error TS1128: Declaration or statement expected.
+src/visual.ts(2606,32): error TS1005: ';' expected.
+src/visual.ts(2606,66): error TS1005: ';' expected.
+src/visual.ts(2610,5): error TS1128: Declaration or statement expected.
+src/visual.ts(2610,27): error TS1005: ',' expected.
+src/visual.ts(2610,41): error TS1005: ',' expected.
+src/visual.ts(2610,50): error TS1011: An element access expression should take an argument.
+src/visual.ts(2610,52): error TS1005: ';' expected.
+src/visual.ts(2610,73): error TS1005: ';' expected.
+src/visual.ts(2620,1): error TS1128: Declaration or statement expected.

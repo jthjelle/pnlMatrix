@@ -1,0 +1,17 @@
+{
+		"version": "1.0.0.127",
+		"author": {"name":"Jonathan Thjelle","email":"jonathan@thjelle.no"},
+		"resources": [
+			{
+				"resourceId": "rId0",
+				"sourceType": 5,
+				"file": "resources/pnlMatrixDEBUG2026020301.pbiviz.json"
+			}
+		],
+		"visual": {"name":"pnlMatrix","displayName":"P&L Matrix","guid":"pnlMatrixDEBUG2026020301","visualClassName":"Visual","version":"1.0.0.127","description":"A P&L Matrix visual with hierarchical rows and variance analysis.","supportUrl":"https://github.com/jthjelle/bildebehandling","gitHubUrl":"https://github.com/jthjelle/bildebehandling"},
+		"metadata": {
+			"pbivizjson": {
+				"resourceId": "rId0"
+			}
+		}
+	}

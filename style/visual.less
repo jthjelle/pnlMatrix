@@ -1,0 +1,52 @@
+.pnl-container {
+    overflow: auto;
+    width: 100%;
+    height: 100%;
+    background-color: #ffffff;
+    /* Force white background */
+    border: 2px solid #0000ff;
+    /* Debug border */
+    color: #000000;
+    /* Force black text */
+}
+
+.pnl-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+
+    th {
+        text-align: right;
+        padding: 5px 10px;
+        background-color: #f0f0f0;
+        border-bottom: 2px solid #ccc;
+        font-weight: 600;
+
+        &:first-child {
+            text-align: left;
+        }
+    }
+
+    td {
+        padding: 4px 10px;
+        border-bottom: 1px solid #eee;
+
+        &.numeric {
+            text-align: right;
+        }
+    }
+
+    tr.subtotal {
+        font-weight: bold;
+        background-color: #f9f9f9;
+
+        td {
+            border-top: 1px solid #999;
+            border-bottom: 2px solid #999;
+        }
+    }
+
+    tr.level-0>td:first-child {
+        font-weight: 600;
+    }
+}
