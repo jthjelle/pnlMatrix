@@ -122,6 +122,124 @@ export class Visual implements IVisual {
     private hasPY: boolean = false;
     private hasForecast: boolean = false;
 
+    private escapeHtml(value: unknown): string {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    private setNodeHtml(parent: HTMLElement, html: string) {
+        const parser = new DOMParser();
+        if (parent.tagName === "TABLE") {
+            const doc = parser.parseFromString(`<table>${html}</table>`, "text/html");
+            const table = doc.querySelector("table");
+            parent.replaceChildren(...Array.from(table?.childNodes || []));
+            return;
+        }
+
+        const doc = parser.parseFromString(`<body>${html}</body>`, "text/html");
+        parent.replaceChildren(...Array.from(doc.body.childNodes));
+    }
+
+    private clearNode(node: HTMLElement) {
+        node.replaceChildren();
+    }
+
+    private createRandomId(prefix: string): string {
+        const bytes = new Uint32Array(2);
+        window.crypto.getRandomValues(bytes);
+        return `${prefix}_${Date.now()}_${bytes[0].toString(36)}${bytes[1].toString(36)}`;
+    }
+
+    private evaluateArithmeticExpression(expression: string): number | undefined {
+        const normalized = expression.replace(/\s+/g, "");
+        if (!normalized || !/^[\d.+\-*/()]+$/.test(normalized)) {
+            return undefined;
+        }
+
+        const tokens = normalized.match(/\d*\.?\d+|[()+\-*/]/g);
+        if (!tokens) {
+            return undefined;
+        }
+
+        const values: number[] = [];
+        const operators: string[] = [];
+        const precedence = (operator: string) => (operator === "+" || operator === "-") ? 1 : 2;
+        const applyOperator = () => {
+            const operator = operators.pop();
+            const right = values.pop();
+            const left = values.pop();
+
+            if (!operator || right == null || left == null) {
+                throw new Error("Invalid expression");
+            }
+
+            switch (operator) {
+                case "+":
+                    values.push(left + right);
+                    break;
+                case "-":
+                    values.push(left - right);
+                    break;
+                case "*":
+                    values.push(left * right);
+                    break;
+                case "/":
+                    values.push(right === 0 ? NaN : left / right);
+                    break;
+                default:
+                    throw new Error("Unsupported operator");
+            }
+        };
+
+        let previousToken: string | null = null;
+        tokens.forEach((token) => {
+            if (/^\d*\.?\d+$/.test(token)) {
+                values.push(Number(token));
+            } else if (token === "(") {
+                operators.push(token);
+            } else if (token === ")") {
+                while (operators.length && operators[operators.length - 1] !== "(") {
+                    applyOperator();
+                }
+                if (operators.pop() !== "(") {
+                    throw new Error("Mismatched parentheses");
+                }
+            } else {
+                const isUnary = token === "-" && (previousToken == null || ["(", "+", "-", "*", "/"].includes(previousToken));
+                if (isUnary) {
+                    values.push(0);
+                }
+                while (
+                    operators.length &&
+                    operators[operators.length - 1] !== "(" &&
+                    precedence(operators[operators.length - 1]) >= precedence(token)
+                ) {
+                    applyOperator();
+                }
+                operators.push(token);
+            }
+            previousToken = token;
+        });
+
+        while (operators.length) {
+            if (operators[operators.length - 1] === "(") {
+                throw new Error("Mismatched parentheses");
+            }
+            applyOperator();
+        }
+
+        if (values.length !== 1) {
+            return undefined;
+        }
+
+        const result = values[0];
+        return Number.isFinite(result) ? result : undefined;
+    }
+
     constructor(options: VisualConstructorOptions) {
         this.host = options.host;
         this.selectionManager = this.host.createSelectionManager();
@@ -155,16 +273,25 @@ export class Visual implements IVisual {
         `;
         document.body.appendChild(this.contextMenu); // Attach to body to ensure top layer
 
-        this.contextMenu.innerHTML = `
-            <div data-action="expandAll" style="padding:4px 12px;cursor:pointer;">Expand All</div>
-            <div data-action="collapseAll" style="padding:4px 12px;cursor:pointer;">Collapse All</div>
-            <div style="border-top:1px solid #ccc;margin:3px 0;"></div>
-            <div data-action="createCalculation" style="padding:4px 12px;cursor:pointer;">Create Calculated Row</div>
-            <div data-action="editCalculation" style="padding:4px 12px;cursor:pointer;">Edit Calculated Rows...</div>
-            <div data-action="deleteRow" style="padding:4px 12px;cursor:pointer;display:none;color:red;">Delete Row</div>
-            <div data-action="deleteRow" style="padding:4px 12px;cursor:pointer;display:none;color:red;">Delete Row</div>
-
-        `;
+        const menuItems = [
+            { action: "expandAll", label: "Expand All", style: "padding:4px 12px;cursor:pointer;" },
+            { action: "collapseAll", label: "Collapse All", style: "padding:4px 12px;cursor:pointer;" },
+            { action: "", label: "", style: "border-top:1px solid #ccc;margin:3px 0;" },
+            { action: "createCalculation", label: "Create Calculated Row", style: "padding:4px 12px;cursor:pointer;" },
+            { action: "editCalculation", label: "Edit Calculated Rows...", style: "padding:4px 12px;cursor:pointer;" },
+            { action: "deleteRow", label: "Delete Row", style: "padding:4px 12px;cursor:pointer;display:none;color:red;" }
+        ];
+        menuItems.forEach((item) => {
+            const div = document.createElement("div");
+            div.style.cssText = item.style;
+            if (item.action) {
+                div.setAttribute("data-action", item.action);
+            }
+            if (item.label) {
+                div.textContent = item.label;
+            }
+            this.contextMenu.appendChild(div);
+        });
 
         // Use Event Delegation for robustness
         this.contextMenu.addEventListener("click", (e) => {
@@ -204,7 +331,7 @@ export class Visual implements IVisual {
 
         // Inject Styles for Hover effects
         const style = document.createElement("style");
-        style.innerHTML = `
+        style.textContent = `
             .visual-container .expand-icon { opacity: 0; transition: opacity 0.2s; }
             .visual-container:hover .expand-icon { opacity: 1; }
 
@@ -327,7 +454,7 @@ export class Visual implements IVisual {
     }
 
     private showSettingsMenu(x: number, y: number, column: string) {
-        this.settingsMenu.innerHTML = "";
+        this.clearNode(this.settingsMenu);
 
         // Option: Hide Column
         const hideBtn = document.createElement("div");
@@ -544,30 +671,30 @@ export class Visual implements IVisual {
                 <label style="display:block;font-weight:bold;font-size:11px;margin-bottom:3px;">Select Row:</label>
                 <div style="display:flex;gap:6px;">
                     <select id="rowSelector" style="flex:1;padding:5px;font-size:12px;">
-                        ${calcRows.map(r => `<option value="${r.id}" ${r.id === currentConfig?.id ? 'selected' : ''}>${r.isBlank || !r.name ? '(Blank Row)' : r.name}</option>`).join('')}
+                        ${calcRows.map(r => `<option value="${this.escapeHtml(r.id)}" ${r.id === currentConfig?.id ? "selected" : ""}>${this.escapeHtml(r.isBlank || !r.name ? "(Blank Row)" : r.name)}</option>`).join("")}
                     </select>
                 </div>
             </div>
-        ` : '';
+        ` : "";
 
-        const deleteBtnHtml = showSelector && hasRows ? `<button id="btnDelete" class="modern-btn danger" style="float:left;">Delete</button>` : '';
+        const deleteBtnHtml = showSelector && hasRows ? `<button id="btnDelete" class="modern-btn danger" style="float:left;">Delete</button>` : "";
 
         // Added Checkboxes for Skip and Result
         const defaultSkip = currentConfig?.skip ? "checked" : "";
         const defaultResult = currentConfig?.result ? "checked" : "";
 
-        content.innerHTML = `
+        this.setNodeHtml(content, `
             <h3 style="margin:0 0 10px 0;font-size:14px;">${title}</h3>
             <div style="display:flex;gap:12px;">
                 <div style="flex:1;">
                     ${selectorHtml}
                     <div style="margin-bottom:6px;">
                         <label style="display:block;font-weight:bold;font-size:10px;margin-bottom:2px;">Name:</label>
-                        <input type="text" id="calcName" value="${defaultName}" style="width:100%;padding:4px;font-size:11px;box-sizing:border-box;" placeholder="e.g. Margin (Leave empty for blank row)">
+                        <input type="text" id="calcName" value="${this.escapeHtml(defaultName)}" style="width:100%;padding:4px;font-size:11px;box-sizing:border-box;" placeholder="e.g. Margin (Leave empty for blank row)">
                     </div>
                     <div id="formulaSection" style="margin-bottom:6px;">
                         <label style="display:block;font-weight:bold;font-size:10px;margin-bottom:2px;">Formula:</label>
-                        <input type="text" id="calcFormula" value='${defaultFormula}' style="width:100%;padding:4px;font-size:11px;box-sizing:border-box;" placeholder='e.g. Revenue - COGS (dependent on your fields). Leave empty for blank row.' autocomplete="off">
+                        <input type="text" id="calcFormula" value="${this.escapeHtml(defaultFormula)}" style="width:100%;padding:4px;font-size:11px;box-sizing:border-box;" placeholder="e.g. Revenue - COGS (dependent on your fields). Leave empty for blank row." autocomplete="off">
                         <div id="autocompleteList" style="position:absolute;z-index:99;background:#fff;border:1px solid #ccc;max-height:100px;overflow-y:auto;display:none;width:calc(100% - 32px);"></div>
                     </div>
                     <div style="margin-bottom:6px;">
@@ -605,7 +732,7 @@ export class Visual implements IVisual {
                 <button id="btnSave" class="modern-btn primary" style="padding:6px 14px;">${btnText}</button>
             </div>
             </div>
-        `;
+        `);
 
         modal.appendChild(content);
         document.body.appendChild(modal);
@@ -672,9 +799,12 @@ export class Visual implements IVisual {
                 );
 
                 if (matches.length > 0) {
-                    autocompleteDiv.innerHTML = matches.map(m =>
-                        `<div style="padding:5px 10px;cursor:pointer;" data-field="${m}">${m}</div>`
-                    ).join("");
+                    this.setNodeHtml(
+                        autocompleteDiv,
+                        matches.map(m =>
+                            `<div style="padding:5px 10px;cursor:pointer;" data-field="${this.escapeHtml(m)}">${this.escapeHtml(m)}</div>`
+                        ).join("")
+                    );
                     autocompleteDiv.style.display = "block";
 
                     autocompleteDiv.querySelectorAll("div").forEach(div => {
@@ -928,8 +1058,7 @@ export class Visual implements IVisual {
             expr = expr.replace(/\[varCYBud\]/gi, String(row.varCYBud ?? 0));
             expr = expr.replace(/\[varCYBudPct\]/gi, String(row.varCYBudPct ?? 0));
 
-            // Safe eval using Function
-            const result = new Function('return ' + expr)();
+            const result = this.evaluateArithmeticExpression(expr);
             return typeof result === 'number' && isFinite(result) ? result : undefined;
         } catch (e) {
             console.error("Formula evaluation error:", e);
@@ -1019,28 +1148,28 @@ export class Visual implements IVisual {
                 <label style="display:block;font-weight:bold;font-size:11px;margin-bottom:3px;">Select Column:</label>
                 <div style="display:flex;gap:6px;">
                     <select id="colSelector" style="flex:1;padding:5px;font-size:12px;">
-                        ${calcCols.map(c => `<option value="${c.id}" ${currentConfig && c.id === currentConfig.id ? 'selected' : ''}>${c.name || '(Unnamed)'}</option>`).join('')}
+                        ${calcCols.map(c => `<option value="${this.escapeHtml(c.id)}" ${currentConfig && c.id === currentConfig.id ? "selected" : ""}>${this.escapeHtml(c.name || "(Unnamed)")}</option>`).join("")}
                     </select>
                 </div>
             </div>
-        ` : '';
+        ` : "";
 
-        const deleteBtnHtml = showSelector && hasCols ? `<button id="btnDelete" class="modern-btn danger" style="float:left;">Delete</button>` : '';
+        const deleteBtnHtml = showSelector && hasCols ? `<button id="btnDelete" class="modern-btn danger" style="float:left;">Delete</button>` : "";
 
         const availableFields = ["actualCY", "actualPY", "budget", "varCYPY", "varCYPYPct", "varCYBud", "varCYBudPct"];
 
-        content.innerHTML = `
+        this.setNodeHtml(content, `
             <h3 style="margin:0 0 10px 0;font-size:14px;">${title}</h3>
             <div style="display:flex;gap:12px;">
                 <div style="flex:1;">
                     ${selectorHtml}
                     <div style="margin-bottom:6px;">
                         <label style="display:block;font-weight:bold;font-size:10px;margin-bottom:2px;">Column Name:</label>
-                        <input type="text" id="colName" value="${defaultName}" style="width:100%;padding:4px;font-size:11px;box-sizing:border-box;" placeholder="e.g. Margin %">
+                        <input type="text" id="colName" value="${this.escapeHtml(defaultName)}" style="width:100%;padding:4px;font-size:11px;box-sizing:border-box;" placeholder="e.g. Margin %">
                     </div>
                     <div style="margin-bottom:6px;position:relative;">
                         <label style="display:block;font-weight:bold;font-size:10px;margin-bottom:2px;">Formula:</label>
-                        <input type="text" id="colFormula" value='${defaultFormula}' style="width:100%;padding:4px;font-size:11px;box-sizing:border-box;" placeholder='e.g. [actualCY] / {Revenue}[actualCY]' autocomplete="off">
+                        <input type="text" id="colFormula" value="${this.escapeHtml(defaultFormula)}" style="width:100%;padding:4px;font-size:11px;box-sizing:border-box;" placeholder="e.g. [actualCY] / {Revenue}[actualCY]" autocomplete="off">
                         <div id="autocompleteList" style="position:absolute;z-index:99;background:#fff;border:1px solid #ccc;max-height:100px;overflow-y:auto;display:none;width:calc(100% - 32px);"></div>
                     </div>
                     <div style="margin-bottom:6px;">
@@ -1068,7 +1197,7 @@ export class Visual implements IVisual {
                 <button id="btnCancel" class="modern-btn" style="margin-right:8px;padding:6px 14px;">Cancel</button>
                 <button id="btnSave" class="modern-btn primary" style="padding:6px 14px;">${btnText}</button>
             </div>
-        `;
+        `);
 
         modal.appendChild(content);
         document.body.appendChild(modal);
@@ -1155,9 +1284,12 @@ export class Visual implements IVisual {
                 );
 
                 if (matches.length > 0) {
-                    autocompleteDiv.innerHTML = matches.map(m =>
-                        `<div class="modern-menu-item" data-field="${m}">${m}</div>`
-                    ).join("");
+                    this.setNodeHtml(
+                        autocompleteDiv,
+                        matches.map(m =>
+                            `<div class="modern-menu-item" data-field="${this.escapeHtml(m)}">${this.escapeHtml(m)}</div>`
+                        ).join("")
+                    );
                     autocompleteDiv.style.display = "block";
 
                     autocompleteDiv.querySelectorAll("div").forEach(div => {
@@ -1274,7 +1406,7 @@ export class Visual implements IVisual {
         });
     }
     private addBlankRow(afterRowId?: string | null) {
-        const id = "blank_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+        const id = this.createRandomId("blank");
         const newRow = {
             id: id,
             name: "", // Initial name empty for blank row
@@ -2078,10 +2210,8 @@ export class Visual implements IVisual {
                 }
 
                 try {
-                    // eslint-disable-next-line no-new-func
-                    const fn = new Function(`return ${expression};`);
-                    const result = fn();
-                    const val = isNaN(result) || !isFinite(result) ? undefined : result;
+                    const result = this.evaluateArithmeticExpression(expression);
+                    const val = result == null || isNaN(result) || !isFinite(result) ? undefined : result;
 
                     if (val != null && config.format && config.format.invertSign) {
                         return val * -1;
@@ -2785,7 +2915,7 @@ export class Visual implements IVisual {
                 // Render Top-Left Cell (Group Label) - Uses Column Header Settings (commonStyle)
                 // Assuming it shares the same style as other headers, or should it use Group Title settings?
                 // Let's keep it with commonStyle (Column Header) for consistency with the corner.
-                html += `<th style="${commonStyle}${colBorder}border-bottom:1px solid #ccc;text-align:left;padding:5px 10px;">${groupLabelText}</th>`;
+                html += `<th style="${commonStyle}${colBorder}border-bottom:1px solid #ccc;text-align:left;padding:5px 10px;">${this.escapeHtml(groupLabelText)}</th>`;
 
                 this.columnGroups.forEach((g, i) => {
                     const isLastGroup = i === this.columnGroups.length - 1;
@@ -2820,7 +2950,7 @@ export class Visual implements IVisual {
                     `;
 
                     html += `<th colspan="${span}" style="${grpThStyle}${fontStyle}">
-                        <div style="${gtInnerStyle}">${g.displayName}</div>
+                        <div style="${gtInnerStyle}">${this.escapeHtml(g.displayName)}</div>
                     </th>`;
                 });
                 html += "</tr>";
@@ -2904,7 +3034,7 @@ export class Visual implements IVisual {
 
                 const finalVStyle = showV && index < columnKeys.length - 1 && !skipVStyle ? vStyle : "";
 
-                html += `<th class="matrix-header" draggable="true" data-column-key="${key}" style="${style}${finalVStyle}${colBorder}${gbHeaderStyle}">${colDef.label} ${icon}</th>`;
+                html += `<th class="matrix-header" draggable="true" data-column-key="${this.escapeHtml(key)}" style="${style}${finalVStyle}${colBorder}${gbHeaderStyle}">${this.escapeHtml(colDef.label)} ${this.escapeHtml(icon)}</th>`;
             });
             html += "</tr>";
             return html;
@@ -2989,7 +3119,7 @@ export class Visual implements IVisual {
             // Keyboard Navigation Attributes
             const tabIndex = 'tabindex="0"';
 
-            let rowHtml = `<tr data-row-id="${row.id}" ${isDraggable} ${tabIndex} style="${trStyle}">`;
+            let rowHtml = `<tr data-row-id="${this.escapeHtml(row.id)}" ${isDraggable} ${tabIndex} style="${trStyle}">`;
 
             columnKeys.forEach((key, colIndex) => {
                 const colDef = allColumns[key];
@@ -3009,7 +3139,9 @@ export class Visual implements IVisual {
                     const catSettings = rowSettings;
                     const indent = row.level * catSettings.indentation.value;
                     let widthStyle = "";
-                    const textWrapStyle = catSettings.textWrap.value ? "white-space:normal;" : "white-space:nowrap;";
+                    const textWrapStyle = catSettings.textWrap.value
+                        ? "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                        : "white-space:nowrap;";
 
                     if (catSettings.textWidthMode.value.value === "fixed") {
                         widthStyle = `width:${catSettings.textWidth.value}px;min-width:${catSettings.textWidth.value}px;max-width:${catSettings.textWidth.value}px;overflow:hidden;text-overflow:ellipsis;`;
@@ -3018,9 +3150,9 @@ export class Visual implements IVisual {
                     const iconVisibility = hasChildren && !disableExpand ? 'visible' : 'hidden';
                     const iconTabIndex = (hasChildren && !disableExpand) ? 'tabindex="0"' : '';
 
-                    rowHtml += `<td style="padding:${padding}px 10px;padding-left:${10 + indent}px;${widthStyle}${textWrapStyle}${cellVStyle};${extraBorder}${rowBorder}" title="${colDef.render(row)}">
-                        <span class="expand-icon" data-id="${row.id}" ${iconTabIndex} style="display:inline-block;width:15px;${cursor}margin-right:5px;text-align:center;visibility:${iconVisibility}">${iconChar}</span>
-                        ${colDef.render(row)}
+                    rowHtml += `<td style="padding:${padding}px 10px;padding-left:${10 + indent}px;${widthStyle}${textWrapStyle}${cellVStyle};${extraBorder}${rowBorder}" title="${this.escapeHtml(colDef.render(row))}">
+                        <span class="expand-icon" data-id="${this.escapeHtml(row.id)}" ${iconTabIndex} style="display:inline-block;width:15px;${cursor}margin-right:5px;text-align:center;visibility:${iconVisibility}">${this.escapeHtml(iconChar)}</span>
+                        ${this.escapeHtml(colDef.render(row))}
                     </td>`;
                 } else {
                     // Data Cell
@@ -3059,7 +3191,7 @@ export class Visual implements IVisual {
 
                     const finalCellVStyle = skipCellVStyle ? "" : cellVStyle;
 
-                    rowHtml += `<td data-column-key="${key}" style="text-align:right;padding:${padding}px 10px;${finalCellVStyle}${cellWidthStyle};${extraBorder}${valBorder}${gbStyle}">${colDef.render(row)}</td>`;
+                    rowHtml += `<td data-column-key="${this.escapeHtml(key)}" style="text-align:right;padding:${padding}px 10px;${finalCellVStyle}${cellWidthStyle};${extraBorder}${valBorder}${gbStyle}">${colDef.render(row)}</td>`;
                 }
             });
             // Recursion removed from here, handled in main loop
@@ -3069,7 +3201,7 @@ export class Visual implements IVisual {
         };
 
         // --- Build HTML ---
-        this.container.innerHTML = "";
+        this.clearNode(this.container);
         const table = document.createElement("table");
         table.style.width = "100%";
         table.style.borderCollapse = "collapse";
@@ -3096,7 +3228,7 @@ export class Visual implements IVisual {
         html += flatRows.map((r, i) => renderRow(r, i, i === flatRows.length - 1)).join("");
         html += "</tbody>";
 
-        table.innerHTML = html;
+        this.setNodeHtml(table, html);
         this.container.appendChild(table);
 
         this.attachEvents(this.formattingSettings.layoutSettings.disableExpandCollapse.value);
@@ -3555,7 +3687,7 @@ export class Visual implements IVisual {
         if (!options.dataViews || !options.dataViews.length || !options.dataViews[0].matrix ||
             !options.dataViews[0].matrix.rows || !options.dataViews[0].matrix.rows.root ||
             !options.dataViews[0].matrix.rows.root.children || options.dataViews[0].matrix.rows.root.children.length === 0) {
-            this.container.innerHTML = "";
+            this.clearNode(this.container);
             const landingDiv = document.createElement("div");
             landingDiv.style.width = "100%";
             landingDiv.style.height = "100%";
@@ -3567,11 +3699,23 @@ export class Visual implements IVisual {
             landingDiv.style.fontFamily = "Segoe UI, sans-serif";
             landingDiv.style.textAlign = "center";
 
-            landingDiv.innerHTML = `
-                <div style="font-size: 24px; font-weight: 600; margin-bottom: 20px;">P&L Matrix</div>
-                <div style="font-size: 14px;">Please add data fields to start.</div>
-                <div style="font-size: 12px; margin-top: 10px; color: #999;">Drag "Row Headers" and Values to the visual.</div>
-            `;
+            const title = document.createElement("div");
+            title.style.fontSize = "24px";
+            title.style.fontWeight = "600";
+            title.style.marginBottom = "20px";
+            title.textContent = "P&L Matrix";
+
+            const subtitle = document.createElement("div");
+            subtitle.style.fontSize = "14px";
+            subtitle.textContent = "Please add data fields to start.";
+
+            const helper = document.createElement("div");
+            helper.style.fontSize = "12px";
+            helper.style.marginTop = "10px";
+            helper.style.color = "#999";
+            helper.textContent = 'Drag "Row Headers" and Values to the visual.';
+
+            landingDiv.append(title, subtitle, helper);
 
             this.container.appendChild(landingDiv);
         }
