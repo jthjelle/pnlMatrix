@@ -240,6 +240,21 @@ export class Visual implements IVisual {
         return Number.isFinite(result) ? result : undefined;
     }
 
+    private isEditMode(): boolean {
+        return this.viewMode === ViewMode.Edit || this.viewMode === ViewMode.InFocusEdit;
+    }
+
+    private updateContextMenuAuthoringState() {
+        const isEditMode = this.isEditMode();
+        this.contextMenu.querySelectorAll<HTMLElement>("[data-authoring-only='true']").forEach((item) => {
+            item.style.display = isEditMode ? "" : "none";
+        });
+
+        this.contextMenu.querySelectorAll<HTMLElement>("[data-authoring-separator='true']").forEach((separator) => {
+            separator.style.display = isEditMode ? "" : "none";
+        });
+    }
+
     constructor(options: VisualConstructorOptions) {
         this.host = options.host;
         this.selectionManager = this.host.createSelectionManager();
@@ -276,16 +291,22 @@ export class Visual implements IVisual {
         const menuItems = [
             { action: "expandAll", label: "Expand All", style: "padding:4px 12px;cursor:pointer;" },
             { action: "collapseAll", label: "Collapse All", style: "padding:4px 12px;cursor:pointer;" },
-            { action: "", label: "", style: "border-top:1px solid #ccc;margin:3px 0;" },
-            { action: "createCalculation", label: "Create Calculated Row", style: "padding:4px 12px;cursor:pointer;" },
-            { action: "editCalculation", label: "Edit Calculated Rows...", style: "padding:4px 12px;cursor:pointer;" },
-            { action: "deleteRow", label: "Delete Row", style: "padding:4px 12px;cursor:pointer;display:none;color:red;" }
+            { action: "", label: "", style: "border-top:1px solid #ccc;margin:3px 0;", authoringSeparator: true },
+            { action: "createCalculation", label: "Create Calculated Row", style: "padding:4px 12px;cursor:pointer;", authoringOnly: true },
+            { action: "editCalculation", label: "Edit Calculated Rows...", style: "padding:4px 12px;cursor:pointer;", authoringOnly: true },
+            { action: "deleteRow", label: "Delete Row", style: "padding:4px 12px;cursor:pointer;display:none;color:red;", authoringOnly: true }
         ];
         menuItems.forEach((item) => {
             const div = document.createElement("div");
             div.style.cssText = item.style;
             if (item.action) {
                 div.setAttribute("data-action", item.action);
+            }
+            if (item.authoringOnly) {
+                div.setAttribute("data-authoring-only", "true");
+            }
+            if (item.authoringSeparator) {
+                div.setAttribute("data-authoring-separator", "true");
             }
             if (item.label) {
                 div.textContent = item.label;
@@ -299,7 +320,11 @@ export class Visual implements IVisual {
             const action = target.getAttribute("data-action");
             if (!action) return;
 
-            console.log("ContextMenu Action:", action); // Debug
+            const editModeOnlyActions = new Set(["createCalculation", "editCalculation", "deleteRow", "addBlankRow"]);
+            if (editModeOnlyActions.has(action) && !this.isEditMode()) {
+                this.hideContextMenu();
+                return;
+            }
 
             if (action === "expandAll") this.expandAll();
             if (action === "collapseAll") this.collapseAll();
@@ -323,6 +348,7 @@ export class Visual implements IVisual {
 
         document.addEventListener("click", () => this.hideContextMenu());
         this.container.addEventListener("scroll", () => this.hideContextMenu());
+        this.updateContextMenuAuthoringState();
 
         // Create Settings Menu
         this.settingsMenu = document.createElement("div");
@@ -454,6 +480,11 @@ export class Visual implements IVisual {
     }
 
     private showSettingsMenu(x: number, y: number, column: string) {
+        if (!this.isEditMode()) {
+            this.hideContextMenu();
+            return;
+        }
+
         this.clearNode(this.settingsMenu);
 
         // Option: Hide Column
@@ -526,6 +557,11 @@ export class Visual implements IVisual {
     }
 
     private showFormattingSubMenu(x: number, y: number, column: string) {
+        if (!this.isEditMode()) {
+            this.hideContextMenu();
+            return;
+        }
+
         // Simple prompt approach for now to avoid building complex sub-menu UI in vanilla JS in one go.
         // In a real app we'd build another div. Let's start with a simple prompt flow or a new menu div.
         // Let's create a temporary sub-menu div.
@@ -628,6 +664,10 @@ export class Visual implements IVisual {
     }
 
     private showCalculationDialog(editConfig?: CalculatedRowConfig, afterRowId?: string | null, showSelector?: boolean) {
+        if (!this.isEditMode()) {
+            return;
+        }
+
         // Create modal
         const modal = document.createElement("div");
         modal.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:20000;display:flex;justify-content:center;align-items:center;";
@@ -1010,6 +1050,10 @@ export class Visual implements IVisual {
     }
 
     private showCalculatedRowSelector() {
+        if (!this.isEditMode()) {
+            return;
+        }
+
         // Filter out blank rows, only show actual calculated rows
         const calcRows = this.calculatedRows.filter(r => !r.isBlank);
 
@@ -1023,6 +1067,10 @@ export class Visual implements IVisual {
     }
 
     private deleteRow(id: string | null) {
+        if (!this.isEditMode()) {
+            return;
+        }
+
         if (!id) return;
         const initLength = this.calculatedRows.length;
         this.calculatedRows = this.calculatedRows.filter(r => r.id !== id);
@@ -1111,6 +1159,10 @@ export class Visual implements IVisual {
     }
 
     private showCalculatedColumnDialog(editConfig?: CalculatedColumnConfig, showSelector: boolean = false) {
+        if (!this.isEditMode()) {
+            return;
+        }
+
         // Allow opening even if no columns - effectively becomes "Create" mode or just empty state
         // if (showSelector && this.calculatedColumns.length === 0) {
         //     alert("No calculated columns to edit. Create one first.");
@@ -1504,6 +1556,10 @@ export class Visual implements IVisual {
     }
 
     private toggleColumnVisibility(column: string) {
+        if (!this.isEditMode()) {
+            return;
+        }
+
         const map: Record<string, string> = {
             "actualCY": "showActualCY",
             "actualPY": "showActualPY",
@@ -1576,6 +1632,7 @@ export class Visual implements IVisual {
     public update(options: VisualUpdateOptions) {
         this.events.renderingStarted(options);
         this.viewMode = options.viewMode;
+        this.updateContextMenuAuthoringState();
 
         // Check for data
         if (!options.dataViews || !options.dataViews[0] || !options.dataViews[0].matrix) {
