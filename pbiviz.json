@@ -4,7 +4,7 @@
         "displayName": "P&L Matrix",
         "guid": "pnlMatrix20260428FB01",
         "visualClassName": "Visual",
-        "version": "1.0.0.133",
+        "version": "1.0.0.141",
         "description": "A P&L Matrix visual with hierarchical rows and variance analysis.",
         "supportUrl": "https://funkybusiness.no/support",
         "gitHubUrl": "https://github.com/jthjelle/pnlMatrix"

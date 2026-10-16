@@ -17,6 +17,8 @@ import { VisualFormattingSettingsModel } from "./settings";
 
 
 interface PnLRow {
+    calculationError?: string;
+    partialCalculation?: boolean;
     label: string;
     id: string; // Unique path ID
     level: number;
@@ -90,6 +92,8 @@ interface CalculatedColumnConfig {
 export class Visual implements IVisual {
     private target: HTMLElement;
     private container: HTMLDivElement;
+    private statementDefinitions: {id: string, label: string}[] = [];
+    private knownHierarchyRows: Set<string> = new Set();
     private currentRows: PnLRow[] = [];
     private sortColumn: SortColumn | null = null;
     private sortDirection: SortDirection = "none";
@@ -154,90 +158,55 @@ export class Visual implements IVisual {
         return `${prefix}_${Date.now()}_${bytes[0].toString(36)}${bytes[1].toString(36)}`;
     }
 
-    private evaluateArithmeticExpression(expression: string): number | undefined {
-        const normalized = expression.replace(/\s+/g, "");
-        if (!normalized || !/^[\d.+\-*/()]+$/.test(normalized)) {
+    private evaluateArithmeticExpression(expression: string, onError?: (message: string) => void): number | undefined {
+        // Parse complete tokens, including scientific notation; never evaluate JavaScript.
+        try {
+            const input = expression.trim();
+            const lexer = /\s*((?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|[()+*/-])/gy;
+            const tokens: string[] = [];
+            let offset = 0;
+            while (offset < input.length) {
+                lexer.lastIndex = offset;
+                const token = lexer.exec(input);
+                if (!token) throw new Error("Invalid formula token");
+                tokens.push(token[1]); offset = lexer.lastIndex;
+            }
+            let index = 0;
+            const primary = (): number => {
+                const token = tokens[index++];
+                if (token === "+") return primary();
+                if (token === "-") return -primary();
+                if (token === "(") {
+                    const value = sum();
+                    if (tokens[index++] !== ")") throw new Error("Mismatched parentheses");
+                    return value;
+                }
+                if (token == null || !/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(token)) throw new Error("Expected a number or row reference");
+                return Number(token);
+            };
+            const product = (): number => {
+                let value = primary();
+                while (tokens[index] === "*" || tokens[index] === "/") {
+                    const operator = tokens[index++]; const right = primary();
+                    value = operator === "*" ? value * right : right === 0 ? NaN : value / right;
+                }
+                return value;
+            };
+            const sum = (): number => {
+                let value = product();
+                while (tokens[index] === "+" || tokens[index] === "-") {
+                    const operator = tokens[index++]; const right = product();
+                    value = operator === "+" ? value + right : value - right;
+                }
+                return value;
+            };
+            const result = sum();
+            if (index !== tokens.length) throw new Error("Unexpected formula token");
+            return Number.isFinite(result) ? result : undefined;
+        } catch (error) {
+            onError?.(error instanceof Error ? error.message : "Invalid formula");
             return undefined;
         }
-
-        const tokens = normalized.match(/\d*\.?\d+|[()+\-*/]/g);
-        if (!tokens) {
-            return undefined;
-        }
-
-        const values: number[] = [];
-        const operators: string[] = [];
-        const precedence = (operator: string) => (operator === "+" || operator === "-") ? 1 : 2;
-        const applyOperator = () => {
-            const operator = operators.pop();
-            const right = values.pop();
-            const left = values.pop();
-
-            if (!operator || right == null || left == null) {
-                throw new Error("Invalid expression");
-            }
-
-            switch (operator) {
-                case "+":
-                    values.push(left + right);
-                    break;
-                case "-":
-                    values.push(left - right);
-                    break;
-                case "*":
-                    values.push(left * right);
-                    break;
-                case "/":
-                    values.push(right === 0 ? NaN : left / right);
-                    break;
-                default:
-                    throw new Error("Unsupported operator");
-            }
-        };
-
-        let previousToken: string | null = null;
-        tokens.forEach((token) => {
-            if (/^\d*\.?\d+$/.test(token)) {
-                values.push(Number(token));
-            } else if (token === "(") {
-                operators.push(token);
-            } else if (token === ")") {
-                while (operators.length && operators[operators.length - 1] !== "(") {
-                    applyOperator();
-                }
-                if (operators.pop() !== "(") {
-                    throw new Error("Mismatched parentheses");
-                }
-            } else {
-                const isUnary = token === "-" && (previousToken == null || ["(", "+", "-", "*", "/"].includes(previousToken));
-                if (isUnary) {
-                    values.push(0);
-                }
-                while (
-                    operators.length &&
-                    operators[operators.length - 1] !== "(" &&
-                    precedence(operators[operators.length - 1]) >= precedence(token)
-                ) {
-                    applyOperator();
-                }
-                operators.push(token);
-            }
-            previousToken = token;
-        });
-
-        while (operators.length) {
-            if (operators[operators.length - 1] === "(") {
-                throw new Error("Mismatched parentheses");
-            }
-            applyOperator();
-        }
-
-        if (values.length !== 1) {
-            return undefined;
-        }
-
-        const result = values[0];
-        return Number.isFinite(result) ? result : undefined;
     }
 
     private isEditMode(): boolean {
@@ -358,8 +327,8 @@ export class Visual implements IVisual {
         // Inject Styles for Hover effects
         const style = document.createElement("style");
         style.textContent = `
-            .visual-container .expand-icon { opacity: 0; transition: opacity 0.2s; }
-            .visual-container:hover .expand-icon { opacity: 1; }
+            .visual-container .pnl-expand-icon { opacity: 0; transition: opacity 0.2s; }
+            .visual-container:hover .pnl-expand-icon { opacity: 1; }
 
             /* Modern Button Styles */
             .modern-btn {
@@ -1083,41 +1052,32 @@ export class Visual implements IVisual {
 
     // --- Calculated Columns ---
     private evaluateColumnFormula(formula: string, row: PnLRow): number | undefined {
-        // Formula parser supports:
-        // - [columnName] - current row's column value
-        // - {RowName}[columnName] - specific row's column value
-        try {
-            let expr = formula;
-
-            // First, replace row-specific references like {Revenue}[actualCY]
-            const rowRefRegex = /\{([^}]+)\}\[([^\]]+)\]/gi;
-            expr = expr.replace(rowRefRegex, (match, rowName, colName) => {
-                const targetRow = this.findRowByLabel(rowName);
-                if (!targetRow) return "0";
-                return String(this.getRowColumnValue(targetRow, colName) ?? 0);
-            });
-
-            // Then, replace current row column references
-            expr = expr.replace(/\[actualCY\]/gi, String(row.actualCY ?? 0));
-            expr = expr.replace(/\[actualPY\]/gi, String(row.actualPY ?? 0));
-            expr = expr.replace(/\[budget\]/gi, String(row.budget ?? 0));
-            expr = expr.replace(/\[varCYPY\]/gi, String(row.varCYPY ?? 0));
-            expr = expr.replace(/\[varCYPYPct\]/gi, String(row.varCYPYPct ?? 0));
-            expr = expr.replace(/\[varCYBud\]/gi, String(row.varCYBud ?? 0));
-            expr = expr.replace(/\[varCYBudPct\]/gi, String(row.varCYBudPct ?? 0));
-
-            const result = this.evaluateArithmeticExpression(expr);
-            return typeof result === 'number' && isFinite(result) ? result : undefined;
-        } catch (e) {
-            console.error("Formula evaluation error:", e);
-            return undefined;
-        }
+        const layout = this.formattingSettings?.layoutSettings;
+        let hasData = false, hasMissing = false, invalid = false;
+        const columns = ["actualcy", "actualpy", "budget", "forecast", "varcypy", "varcypypct", "varcybud", "varcybudpct", "varcyfcst", "varcyfcstpct"];
+        const resolve = (target: PnLRow | undefined, column: string): string => {
+            if (!columns.includes(column.trim().toLowerCase())) { invalid = true; return "0"; }
+            const value = target && this.getRowColumnValue(target, column.trim());
+            if (typeof value === "number" && Number.isFinite(value)) { hasData = true; return `(${value})`; }
+            hasMissing = true; return "0";
+        };
+        let expression = formula.replace(/\{([^}]+)\}\[([^\]]+)\]/g, (_match, label, column) => {
+            const target = this.findRowByLabel(label.trim());
+            const known = target || this.statementDefinitions?.some(r => r.label.trim().toLowerCase() === label.trim().toLowerCase());
+            if (!known || target?.calculationError) invalid = true;
+            return resolve(target, column);
+        });
+        expression = expression.replace(/\[([^\]]+)\]/g, (_match, column) => resolve(row, column));
+        if (invalid || (hasMissing && !layout?.missingAsZero?.value)) return undefined;
+        if (hasMissing && !hasData && !layout?.emptyCalculationAsZero?.value) return undefined;
+        return this.evaluateArithmeticExpression(expression);
     }
 
     private findRowByLabel(label: string): PnLRow | undefined {
         const search = (rows: PnLRow[]): PnLRow | undefined => {
+            const match = rows.find(r => r.label.trim().toLowerCase() === label.trim().toLowerCase());
+            if (match) return match;
             for (const r of rows) {
-                if (r.label.toLowerCase() === label.toLowerCase()) return r;
                 if (r.children.length > 0) {
                     const found = search(r.children);
                     if (found) return found;
@@ -1133,6 +1093,9 @@ export class Visual implements IVisual {
         if (col === "actualcy") return row.actualCY;
         if (col === "actualpy") return row.actualPY;
         if (col === "budget") return row.budget;
+        if (col === "forecast") return row.forecast;
+        if (col === "varcyfcst") return row.varCYFcst;
+        if (col === "varcyfcstpct") return row.varCYFcstPct;
         if (col === "varcypy") return row.varCYPY;
         if (col === "varcypypct") return row.varCYPYPct;
         if (col === "varcybud") return row.varCYBud;
@@ -1642,9 +1605,12 @@ export class Visual implements IVisual {
         }
 
         const dataView = options.dataViews[0];
+        this.formattingSettings = this.formattingSettingsService.populateFormattingSettingsModel(VisualFormattingSettingsModel, dataView);
 
         // Check if empty
-        if (!dataView.matrix.rows || !dataView.matrix.rows.root || !dataView.matrix.rows.root.children || dataView.matrix.rows.root.children.length === 0) {
+        const keepEmptyStatement = dataView.metadata?.objects?.layoutSettings?.preserveEmptyRows === true;
+        if (!dataView.matrix.rows || !dataView.matrix.rows.root ||
+            ((!dataView.matrix.rows.root.children || dataView.matrix.rows.root.children.length === 0) && !keepEmptyStatement)) {
             this.handleLandingPage(options);
             this.events.renderingFinished(options);
             return;
@@ -1652,8 +1618,6 @@ export class Visual implements IVisual {
 
         // Clear landing page if it exists
         this.container.style.display = "block";
-
-        this.formattingSettings = this.formattingSettingsService.populateFormattingSettingsModel(VisualFormattingSettingsModel, dataView);
 
 
         // Apply dynamic visibility for Border Settings
@@ -1675,7 +1639,7 @@ export class Visual implements IVisual {
         const objects = options.dataViews[0]?.metadata?.objects;
         if (objects && objects["layoutSettings"]) {
             const layout = this.formattingSettings.layoutSettings;
-            const hiddenProps = ["columnOrder", "columnFormatting", "rowOrder", "calculatedRows", "invertedRows", "calculatedColumns"];
+            const hiddenProps = ["statementRows", "columnOrder", "columnFormatting", "rowOrder", "calculatedRows", "invertedRows", "calculatedColumns"];
             hiddenProps.forEach(prop => {
                 const val = objects["layoutSettings"][prop];
                 if (val !== undefined && (layout as any)[prop]) {
@@ -1713,6 +1677,9 @@ export class Visual implements IVisual {
         }
 
         this.currentRows = this.parseRows(dataView.matrix);
+        if (this.columnGroups.length > 0 && this.formattingSettings.layoutSettings.showColumnTotal.value) {
+            this.columnGroups.push({ name: "__pnl_period_total__", displayName: "Total" });
+        }
 
         // Parse Column Formatting
         try {
@@ -1777,14 +1744,28 @@ export class Visual implements IVisual {
                     if (n.budget != null) n.budget *= -1;
                     if (n.forecast != null) n.forecast *= -1;
 
+                    Object.values(n.groupedValues || {}).forEach(values => {
+                        ["actualCY", "actualPY", "budget", "forecast"].forEach(key => {
+                            if (values[key] != null) values[key] *= -1;
+                        });
+                        values.varCYPY = values.actualCY != null && values.actualPY != null ? values.actualCY - values.actualPY : undefined;
+                        values.varCYBud = values.actualCY != null && values.budget != null ? values.actualCY - values.budget : undefined;
+                        values.varCYFcst = values.actualCY != null && values.forecast != null ? values.actualCY - values.forecast : undefined;
+                        values.varCYPYPct = values.varCYPY != null && values.actualPY ? values.varCYPY / Math.abs(values.actualPY) : undefined;
+                        values.varCYBudPct = values.varCYBud != null && values.budget ? values.varCYBud / Math.abs(values.budget) : undefined;
+                        values.varCYFcstPct = values.varCYFcst != null && values.forecast ? values.varCYFcst / Math.abs(values.forecast) : undefined;
+                    });
+
                     // Recalculate variances
                     const variance = (a?: number, b?: number) => (a != null && b != null) ? a - b : undefined;
-                    const variancePct = (diff?: number, base?: number) => (base) ? diff! / Math.abs(base) : undefined;
+                    const variancePct = (diff?: number, base?: number) => diff != null && base ? diff / Math.abs(base) : undefined;
 
                     n.varCYPY = variance(n.actualCY, n.actualPY);
                     n.varCYPYPct = variancePct(n.varCYPY, n.actualPY);
                     n.varCYBud = variance(n.actualCY, n.budget);
                     n.varCYBudPct = variancePct(n.varCYBud, n.budget);
+                    n.varCYFcst = variance(n.actualCY, n.forecast);
+                    n.varCYFcstPct = variancePct(n.varCYFcst, n.forecast);
 
                     if (n.children) invertRecursive(n.children);
                 });
@@ -1800,28 +1781,10 @@ export class Visual implements IVisual {
             this.currentRows = this.currentRows.filter(r => r.label.toLowerCase() !== "total" && r.label.toLowerCase() !== "grand total");
 
             const totalRow: PnLRow = {
+                ...this.aggregateRows(this.currentRows),
                 label: this.formattingSettings.layoutSettings.grandTotalLabel.value || "Grand Total",
-                id: "grand_total",
-                level: 0,
-                isSubtotal: true,
-                children: [],
-                actualCY: this.currentRows.reduce((a, b) => a + (b.actualCY || 0), 0),
-                actualPY: this.currentRows.reduce((a, b) => a + (b.actualPY || 0), 0),
-                budget: this.currentRows.reduce((a, b) => a + (b.budget || 0), 0),
-                forecast: this.currentRows.reduce((a, b) => a + (b.forecast || 0), 0)
+                id: "grand_total", level: 0, isSubtotal: true, children: []
             };
-
-            // Calc variances for total
-            const variance = (a?: number, b?: number) => (a != null && b != null) ? a - b : undefined;
-            const variancePct = (d?: number, b?: number) => (b) ? d! / Math.abs(b) : undefined;
-
-            totalRow.varCYPY = variance(totalRow.actualCY, totalRow.actualPY);
-            totalRow.varCYPYPct = variancePct(totalRow.varCYPY, totalRow.actualPY);
-            totalRow.varCYBud = variance(totalRow.actualCY, totalRow.budget);
-            totalRow.varCYBudPct = variancePct(totalRow.varCYBud, totalRow.budget);
-            totalRow.varCYFcst = variance(totalRow.actualCY, totalRow.forecast);
-            totalRow.varCYFcstPct = variancePct(totalRow.varCYFcst, totalRow.forecast);
-
 
             // Add Grand Total at top or bottom based on setting
             const position = this.formattingSettings.layoutSettings.grandTotalPosition.value.value;
@@ -1834,6 +1797,7 @@ export class Visual implements IVisual {
             this.currentRows = this.currentRows.filter(r => r.label.toLowerCase() !== "total" && r.label.toLowerCase() !== "grand total");
         }
 
+        this.restoreStatementRows();
         this.injectCalculatedRows(); // Inject user calculations
 
         // Save grand total position setting and remove it before TopN processing
@@ -1864,12 +1828,17 @@ export class Visual implements IVisual {
 
         if (disableExpand) {
             this.collapsedRows.clear();
-        } else if (this.collapsedRows.size === 0) {
-            // First load: Collapse all by default
+            this.knownHierarchyRows = new Set();
+        } else {
+            // Collapse only newly encountered parents; preserve expansion across updates.
+            this.knownHierarchyRows ??= new Set();
             const collapseAllWithChildren = (rows: PnLRow[]) => {
                 rows.forEach(row => {
                     if (row.children && row.children.length > 0) {
-                        this.collapsedRows.add(row.id);
+                        if (!this.knownHierarchyRows.has(row.id)) {
+                            this.collapsedRows.add(row.id);
+                            this.knownHierarchyRows.add(row.id);
+                        }
                         collapseAllWithChildren(row.children);
                     }
                 });
@@ -2037,25 +2006,14 @@ export class Visual implements IVisual {
                     if (!groupedValues[g]) groupedValues[g] = {};
                     const gv = groupedValues[g];
 
-                    // Helper to sum child property
-                    const sum = (m: string) => children.reduce((s, c) => {
-                        const val = c.groupedValues && c.groupedValues[g] ? c.groupedValues[g][m] : undefined;
-                        return s + (val || 0);
-                    }, 0);
-
-                    // Only aggregate if we don't have a value (DataView precedence)
-                    if (gv["actualCY"] == null) gv["actualCY"] = sum("actualCY");
-                    if (gv["actualPY"] == null) gv["actualPY"] = sum("actualPY");
-                    if (gv["budget"] == null) gv["budget"] = sum("budget");
-                    if (gv["forecast"] == null) gv["forecast"] = sum("forecast");
-
-                    // Invert aggregated result if needed
-                    if (this.invertedRows.has(id)) {
-                        if (gv["actualCY"] != null) gv["actualCY"] *= -1;
-                        if (gv["actualPY"] != null) gv["actualPY"] *= -1;
-                        if (gv["budget"] != null) gv["budget"] *= -1;
-                        if (gv["forecast"] != null) gv["forecast"] *= -1;
-                    }
+                    ["actualCY", "actualPY", "budget", "forecast"].forEach(measure => {
+                        if (gv[measure] != null) return;
+                        const values = children.map(c => c.groupedValues?.[g]?.[measure]).filter(v => v != null && Number.isFinite(v));
+                        if (values.length) {
+                            const sum = values.reduce((a, b) => a + b, 0);
+                            gv[measure] = this.invertedRows.has(id) ? -sum : sum;
+                        }
+                    });
 
                     // Calc Variances for the aggregated group
                     gv["varCYPY"] = variance(gv["actualCY"], gv["actualPY"]);
@@ -2069,13 +2027,17 @@ export class Visual implements IVisual {
                 // Re-sum totals from groups
                 totalAC = 0; totalPY = 0; totalBud = 0; totalFcst = 0;
                 Object.values(groupedValues).forEach(gv => {
-                    totalAC += (gv["actualCY"] || 0);
-                    totalPY += (gv["actualPY"] || 0);
-                    totalBud += (gv["budget"] || 0);
-                    totalFcst += (gv["forecast"] || 0);
+                    if (gv.actualCY != null) { totalAC += gv.actualCY; hasAC = true; }
+                    if (gv.actualPY != null) { totalPY += gv.actualPY; hasPY = true; }
+                    if (gv.budget != null) { totalBud += gv.budget; hasBud = true; }
+                    if (gv.forecast != null) { totalFcst += gv.forecast; hasFcst = true; }
                 });
             }
 
+            totalAC = hasAC ? totalAC : undefined;
+            totalPY = hasPY ? totalPY : undefined;
+            totalBud = hasBud ? totalBud : undefined;
+            totalFcst = hasFcst ? totalFcst : undefined;
             return {
                 label: label,
                 id: id,
@@ -2103,6 +2065,28 @@ export class Visual implements IVisual {
 
     private parseTotal(matrix: powerbi.DataViewMatrix): PnLRow | undefined {
         return undefined; // Deprecated
+    }
+
+    private aggregateRows(rows: PnLRow[]): Partial<PnLRow> {
+        const sum = (values: Record<string, number>[]): Record<string, number> => {
+            const result: Record<string, number> = {};
+            ["actualCY", "actualPY", "budget", "forecast"].forEach(key => {
+                const amounts = values.map(v => v[key]).filter(v => v != null && Number.isFinite(v));
+                if (amounts.length) result[key] = amounts.reduce((a,b) => a+b, 0);
+            });
+            [["actualPY", "varCYPY"], ["budget", "varCYBud"], ["forecast", "varCYFcst"]].forEach(([base, delta]) => {
+                if (result.actualCY != null && result[base] != null) {
+                    result[delta] = result.actualCY - result[base];
+                    if (result[base]) result[delta + "Pct"] = result[delta] / Math.abs(result[base]);
+                }
+            });
+            return result;
+        };
+        const groups = new Set<string>();
+        rows.forEach(r => Object.keys(r.groupedValues || {}).forEach(g => groups.add(g)));
+        const groupedValues: Record<string, Record<string, number>> = {};
+        groups.forEach(g => { groupedValues[g] = sum(rows.map(r => r.groupedValues?.[g] || {})); });
+        return { ...sum(rows.map(r => ({actualCY:r.actualCY, actualPY:r.actualPY, budget:r.budget, forecast:r.forecast}))), groupedValues };
     }
 
     private applyTopN(rows: PnLRow[]): PnLRow[] {
@@ -2136,29 +2120,10 @@ export class Visual implements IVisual {
 
             if (others.length > 0) {
                 const otherRow: PnLRow = {
-                    label: otherLabel,
-                    id: nodes[0].id + "_others", // Synthesize ID
-                    level: nodes[0].level, // Same level as peers
-                    isSubtotal: true, // Style as subtotal/distinct
-                    children: [], // Flattened "Other" usually doesn't show children unless expanded, but for simplicity we aggregate values.
-                    actualCY: others.reduce((s, r) => s + (r.actualCY || 0), 0),
-                    actualPY: others.reduce((s, r) => s + (r.actualPY || 0), 0),
-                    budget: others.reduce((s, r) => s + (r.budget || 0), 0),
-                    forecast: others.reduce((s, r) => s + (r.forecast || 0), 0),
+                    ...this.aggregateRows(others), label: otherLabel,
+                    id: nodes[0].id + "_others", level: nodes[0].level,
+                    isSubtotal: true, children: []
                 };
-
-                // Recalculate variances for Other
-                // Re-use variance logic from render/parse scope? Or duplicate tiny helpers?
-                const variance = (a: number, b: number) => a - b;
-                const variancePct = (diff: number, base: number) => base !== 0 ? diff / Math.abs(base) : 0;
-
-                otherRow.varCYPY = variance(otherRow.actualCY!, otherRow.actualPY!);
-                otherRow.varCYPYPct = variancePct(otherRow.varCYPY, otherRow.actualPY!);
-                otherRow.varCYBud = variance(otherRow.actualCY!, otherRow.budget!);
-                otherRow.varCYBudPct = variancePct(otherRow.varCYBud, otherRow.budget!);
-                otherRow.varCYFcst = variance(otherRow.actualCY!, otherRow.forecast!);
-                otherRow.varCYFcstPct = variancePct(otherRow.varCYFcst, otherRow.forecast!);
-
 
                 top.push(otherRow);
             }
@@ -2171,6 +2136,38 @@ export class Visual implements IVisual {
         };
 
         return processLevel(rows);
+    }
+
+    // Persist only top-level definitions, never account children or amounts.
+    private restoreStatementRows() {
+        const layout = this.formattingSettings.layoutSettings;
+        this.statementDefinitions = [];
+        let definitions: {id: string, label: string}[];
+        try {
+            definitions = JSON.parse(layout.statementRows.value || "[]");
+            if (!Array.isArray(definitions) || definitions.some(r => !r || typeof r.id !== "string" || typeof r.label !== "string")) return;
+        } catch { return; }
+        const calculatedIds = new Set(this.calculatedRows.map(r => r.id));
+        definitions = [...new Map(definitions.filter(r => !calculatedIds.has(r.id)).map(r => [r.id, r])).values()];
+        if (layout.preserveEmptyRows.value) {
+            const known = new Set(definitions.map(r => r.id));
+            const additions = this.currentRows.filter(r => r.level === 0 && r.id !== "grand_total" && !calculatedIds.has(r.id) && !known.has(r.id))
+                .map(r => ({id: r.id, label: r.label}));
+            if (additions.length) {
+                definitions.push(...additions);
+                const value = JSON.stringify(definitions);
+                layout.statementRows.value = value;
+                this.host.persistProperties({merge: [{objectName: "layoutSettings", selector: null, properties: {statementRows: value}}]});
+            }
+        }
+        // Formulas still know the complete row catalogue when empty rows are hidden.
+        const present = new Set(this.currentRows.map(r => r.id));
+        this.statementDefinitions = definitions;
+        if (layout.preserveEmptyRows.value) {
+            definitions.filter(r => !present.has(r.id)).forEach(r => this.currentRows.push({
+                ...r, level: 0, isSubtotal: false, children: []
+            }));
+        }
     }
 
     private injectCalculatedRows() {
@@ -2191,92 +2188,76 @@ export class Visual implements IVisual {
         // Map all rows for easy access
         // Map all rows for easy access
         const rowMap = new Map<string, PnLRow>();
-        getAllRows(this.currentRows).forEach(r => rowMap.set(r.label.trim().toLowerCase(), r));
+        [...this.currentRows, ...getAllRows(this.currentRows)].forEach(r => {
+            const key = r.label.trim().toLowerCase();
+            if (!rowMap.has(key)) rowMap.set(key, r);
+        });
 
-        this.calculatedRows.forEach(config => {
+        const layout = this.formattingSettings?.layoutSettings;
+        const missingAsZero = layout?.missingAsZero?.value ?? false;
+        const emptyAsZero = layout?.emptyCalculationAsZero?.value ?? false;
+        (this.statementDefinitions || []).forEach(r => {
+            const key = r.label.trim().toLowerCase();
+            if (!rowMap.has(key)) rowMap.set(key, {...r, level: 0, isSubtotal: false, children: []});
+        });
+        const configs = new Map(this.calculatedRows.filter(c => !c.isBlank).map(c => [c.name.trim().toLowerCase(), c]));
+        // Resolve explicit references before bare names; unknown names remain errors.
+        const names = [...new Set([...rowMap.keys(), ...configs.keys()])].filter(Boolean).sort((a,b) => b.length-a.length);
+        const tokenize = (formula: string) => {
+            const references: string[] = [];
+            const token = (name: string) => { references.push(name.trim().toLowerCase()); return `@${references.length-1}@`; };
+            let expression = formula.replace(/\[([^\]]+)\]|"([^"]+)"|'([^']+)'/g, (_match, a, b, c) => token(a ?? b ?? c));
+            names.forEach(name => {
+                const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                expression = expression.replace(new RegExp(`(^|[^\\p{L}\\p{N}_@])(${escaped})(?![\\p{L}\\p{N}_@])`, "giu"), (_m, prefix) => prefix + token(name));
+            });
+            return {expression, references};
+        };
+        const parsed = new Map([...configs].map(([key,c]) => [key, tokenize(c.formula)]));
+        const visiting = new Set<string>();
+        const done = new Set<string>();
+        const ordered: CalculatedRowConfig[] = [];
+        const errors = new Map<string,string>();
+        const visit = (key: string) => {
+            if (visiting.has(key)) { errors.set(key, "Circular formula reference: " + key); return; }
+            if (done.has(key)) return;
+            visiting.add(key);
+            parsed.get(key).references.forEach(ref => {
+                if (configs.has(ref)) visit(ref);
+                else if (!rowMap.has(ref)) errors.set(key, "Unknown formula row: " + ref);
+                if (errors.has(ref)) errors.set(key, errors.get(ref));
+            });
+            visiting.delete(key); done.add(key); ordered.push(configs.get(key));
+        };
+        configs.forEach((_c,key) => visit(key));
+        [...ordered, ...this.calculatedRows.filter(c => c.isBlank)].forEach(config => {
             if (config.isBlank) {
-                const newRow: PnLRow = {
-                    label: "", // Empty label as requested
-                    id: config.id,
-                    level: 0,
-                    isSubtotal: false,
-                    children: [],
-                    isBlank: true
-                };
-                this.currentRows.push(newRow);
-                this.currentRows.push(newRow);
-                rowMap.set(newRow.label.trim().toLowerCase(), newRow);
+                this.currentRows.push({label: "", id: config.id, level: 0, isSubtotal: false, children: [], isBlank: true});
                 return;
             }
-
-            // Helper to get value
-            // Helper to get value
-            const getValue = (label: string, field: keyof PnLRow): number => {
-                // Normalize: Trim and Lowercase. 
-                // Note: We do NOT remove quotes here as the label from formula (via sortedNames) should be clean.
-                // If the formula was " 'Revenue' ", the parsing might need care, but current logic iterates known names.
-                const key = label.trim().toLowerCase();
-                const r = rowMap.get(key);
-                return r && r[field] ? r[field] as number : 0;
-            };
-
-            // Strategy: Use placeholders to avoid replacing parts of numbers or previously substituted values
-            // Filter out empty row names to avoid matching empty strings
-            const sortedNames = Array.from(rowMap.keys()).filter(n => n.length > 0).sort((a, b) => b.length - a.length);
-
-            const compute = (field: keyof PnLRow): number | undefined => {
-                // Strip quotes from formula FIRST before any matching
-                let expression = config.formula.replace(/['"]/g, "");
-                const replacements: { placeholder: string, value: number }[] = [];
-
-                console.log(`[CalcRow DEBUG] Formula: "${config.formula}", Field: ${field}`);
-                console.log(`[CalcRow DEBUG] Stripped formula: "${expression}"`);
-                console.log(`[CalcRow DEBUG] Available rows:`, sortedNames.slice(0, 10)); // Show first 10 only
-
-                // 1. Replace all names with unique placeholders
-                for (let i = 0; i < sortedNames.length; i++) {
-                    const name = sortedNames[i];
-
-                    const esc = name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-                    // Use word boundaries if possible, but names can contain spaces.
-                    // We'll rely on length sorting and placeholders.
-                    const re = new RegExp(esc, "gi");
-
-                    // Use match() to check without advancing pointer, then replace
-                    if (expression.match(re)) {
-                        const placeholder = `__VAR_${i}__`;
-                        const val = getValue(name, field);
-                        console.log(`[CalcRow DEBUG] Matched "${name}" -> value: ${val}`);
-                        replacements.push({ placeholder, value: val });
-                        // Create fresh regex for replace to avoid stateful issues
-                        expression = expression.replace(new RegExp(esc, "gi"), placeholder);
-                    }
-                }
-
-                // 2. Replace placeholders with values
-                replacements.forEach(rep => {
-                    expression = expression.split(rep.placeholder).join(String(rep.value));
+            const key = config.name.trim().toLowerCase();
+            const formula = parsed.get(key);
+            let calculationError = errors.get(key);
+            let partialCalculation = false;
+            const compute = (field: keyof PnLRow, group?: string): number | undefined => {
+                if (calculationError) return undefined;
+                let hasData = false;
+                let hasMissing = false;
+                let invalidDependency = false;
+                const expression = formula.expression.replace(/@(\d+)@/g, (_match, index) => {
+                    const row = rowMap.get(formula.references[Number(index)]);
+                    if (!row || row.calculationError) { invalidDependency = true; return "0"; }
+                    const value = group === undefined ? row[field] : row.groupedValues?.[group]?.[field];
+                    if (typeof value === "number" && Number.isFinite(value)) { hasData = true; return `(${value})`; }
+                    hasMissing = true; return "0";
                 });
-
-                console.log(`[CalcRow DEBUG] Final expression: "${expression}"`);
-
-                // Safety check: only allow basic math chars
-                if (!/^[\d\.\+\-\*\/\(\)\s]+$/.test(expression)) {
-                    console.log(`[CalcRow DEBUG] FAILED safety check - expression contains invalid chars`);
-                    return undefined;
-                }
-
-                try {
-                    const result = this.evaluateArithmeticExpression(expression);
-                    const val = result == null || isNaN(result) || !isFinite(result) ? undefined : result;
-
-                    if (val != null && config.format && config.format.invertSign) {
-                        return val * -1;
-                    }
-                    return val;
-                } catch (e) {
-                    return undefined;
-                }
+                if (invalidDependency) { calculationError = "Invalid formula dependency"; return undefined; }
+                if (!/^[\d.eE+*/()\s-]+$/.test(expression)) { calculationError = "Invalid formula or unknown row reference"; return undefined; }
+                if (hasMissing && !missingAsZero) return undefined;
+                if (formula.references.length && !hasData && !emptyAsZero) return undefined;
+                partialCalculation ||= hasMissing && hasData;
+                const result = this.evaluateArithmeticExpression(expression, message => { calculationError = message; });
+                return result == null || !Number.isFinite(result) ? undefined : config.format?.invertSign ? -result : result;
             };
 
             const actualCY = compute("actualCY");
@@ -2284,14 +2265,41 @@ export class Visual implements IVisual {
             const budget = compute("budget");
             const forecast = compute("forecast");
 
-            const variance = (a?: number, b?: number) => (a != null && b != null) ? a - b : undefined;
-            const variancePct = (diff?: number, base?: number) => (base) ? diff! / Math.abs(base) : undefined;
+            // Evaluate formulas in each column group as well as over period totals.
+            // In particular, a total percentage must be a ratio of period totals,
+            // rather than a sum or unweighted average of monthly percentages.
+            const groupedValues: Record<string, Record<string, number>> = {};
+            const groups = new Set<string>((this.columnGroups || []).map(g => g.name).filter(g => g !== "__pnl_period_total__"));
+            rowMap.forEach(row => Object.keys(row.groupedValues ?? {}).forEach(group => groups.add(group)));
+            groups.forEach(group => {
+                const values: Record<string, number> = {};
+                ["actualCY", "actualPY", "budget", "forecast"].forEach(measure => {
+                    const value = compute(measure as keyof PnLRow, group);
+                    if (value !== undefined) values[measure] = value;
+                });
+                groupedValues[group] = values;
+            });
 
+            const variance = (a?: number, b?: number) => (a != null && b != null) ? a - b : undefined;
+            const variancePct = (diff?: number, base?: number) =>
+                diff != null && base != null && base !== 0 && Number.isFinite(diff) && Number.isFinite(base)
+                    ? diff / Math.abs(base) : undefined;
+
+            Object.values(groupedValues).forEach(values => {
+                values.varCYPY = variance(values.actualCY, values.actualPY);
+                values.varCYPYPct = variancePct(values.varCYPY, values.actualPY);
+                values.varCYBud = variance(values.actualCY, values.budget);
+                values.varCYBudPct = variancePct(values.varCYBud, values.budget);
+                values.varCYFcst = variance(values.actualCY, values.forecast);
+                values.varCYFcstPct = variancePct(values.varCYFcst, values.forecast);
+            });
             const varCYPY = variance(actualCY, actualPY);
             const varCYBud = variance(actualCY, budget);
             const varCYFcst = variance(actualCY, forecast);
 
             const newRow: PnLRow = {
+                calculationError,
+                partialCalculation,
                 label: config.name,
                 id: config.id,
                 level: 0,
@@ -2299,6 +2307,7 @@ export class Visual implements IVisual {
                 actualCY,
                 actualPY,
                 budget,
+                forecast,
                 varCYPY,
                 varCYPYPct: variancePct(varCYPY, actualPY),
                 varCYBud,
@@ -2306,6 +2315,7 @@ export class Visual implements IVisual {
                 varCYFcst,
                 varCYFcstPct: variancePct(varCYFcst, forecast),
                 children: [],
+                groupedValues,
                 format: config.format, // Pass formatting
                 skip: config.skip,
                 result: config.result
@@ -2314,7 +2324,7 @@ export class Visual implements IVisual {
             // Add to current Rows
             this.currentRows.push(newRow);
             // Also add to map so subsequent calculations can use it?
-            rowMap.set(newRow.label.toLowerCase(), newRow);
+            rowMap.set(newRow.label.trim().toLowerCase(), newRow);
         });
 
         // After injecting all calculated rows, re-sort currentRows if a manual order exists
@@ -2452,6 +2462,15 @@ export class Visual implements IVisual {
                     this.columnTotals[k as string] = Math.max(this.columnTotals[k as string] || 0, v);
                 }
             });
+            Object.entries(r.groupedValues || {}).forEach(([group, values]) => {
+                keys.forEach(key => {
+                    const value = values[key];
+                    if (value != null && Number.isFinite(value)) {
+                        const compound = `${group}_${key}`;
+                        this.columnTotals[compound] = Math.max(this.columnTotals[compound] || 0, Math.abs(value));
+                    }
+                });
+            });
             if (r.children) r.children.forEach(process);
         };
         rows.forEach(process);
@@ -2460,7 +2479,7 @@ export class Visual implements IVisual {
 
     private renderCell(row: PnLRow, key: string, val: number | undefined, fmt: (v: number) => string): string {
         if (row.isBlank) return "&nbsp;";
-        if (val == null) return "-";
+        if (val == null || !Number.isFinite(val)) return "-";
         const config = this.columnFormatting[key] || {};
 
         // Text Wrap logic (default to off/nowrap)
@@ -2741,6 +2760,7 @@ export class Visual implements IVisual {
 
         // Helper to get raw value
         const getVal = (r: PnLRow, measure: string, group?: string) => {
+            if (group === "__pnl_period_total__") return r[measure];
             if (!group) return r[measure]; // Flat structure
             // In grouped structure, we expect r.values[group][measure] or similar?
             // Actually, parseRows likely needs update to flatten the matrix correctly or store it structually.
@@ -3181,7 +3201,8 @@ export class Visual implements IVisual {
             columnKeys.forEach((key, colIndex) => {
                 const colDef = allColumns[key];
                 const isLastCol = colIndex === columnKeys.length - 1;
-                const cellVStyle = showV && !isLastCol ? vStyle : "";
+                    const cellVStyle = (showV && !isLastCol ? vStyle : "")
+                        + (key.startsWith("__pnl_period_total__") ? "font-weight:bold;" : "");
 
                 let cellWidthStyle = "";
                 if (this.formattingSettings.columnsSettings.columnHeaderSettings.headerWidthMode.value.value === "fixed") {
@@ -3207,8 +3228,8 @@ export class Visual implements IVisual {
                     const iconVisibility = hasChildren && !disableExpand ? 'visible' : 'hidden';
                     const iconTabIndex = (hasChildren && !disableExpand) ? 'tabindex="0"' : '';
 
-                    rowHtml += `<td style="padding:${padding}px 10px;padding-left:${10 + indent}px;${widthStyle}${textWrapStyle}${cellVStyle};${extraBorder}${rowBorder}" title="${this.escapeHtml(colDef.render(row))}">
-                        <span class="expand-icon" data-id="${this.escapeHtml(row.id)}" ${iconTabIndex} style="display:inline-block;width:15px;${cursor}margin-right:5px;text-align:center;visibility:${iconVisibility}">${this.escapeHtml(iconChar)}</span>
+                    rowHtml += `<td style="padding:${padding}px 10px;padding-left:${10 + indent}px;${widthStyle}${textWrapStyle}${cellVStyle};${extraBorder}${rowBorder}" title="${this.escapeHtml(row.calculationError || (row.partialCalculation ? colDef.render(row) + ": Based on available amounts; missing inputs treated as zero" : colDef.render(row)))}">
+                        <span class="pnl-expand-icon" data-id="${this.escapeHtml(row.id)}" ${iconTabIndex} style="display:inline-block;width:15px;${cursor}margin-right:5px;text-align:center;color:#444;font-size:12px;line-height:1;opacity:1;font-weight:600;visibility:${iconVisibility}">${this.escapeHtml(iconChar)}</span>
                         ${this.escapeHtml(colDef.render(row))}
                     </td>`;
                 } else {
@@ -3293,7 +3314,7 @@ export class Visual implements IVisual {
 
     private attachEvents(disableExpand: boolean) {
         if (!disableExpand) {
-            this.container.querySelectorAll(".expand-icon").forEach((span: HTMLElement) => {
+            this.container.querySelectorAll(".pnl-expand-icon").forEach((span: HTMLElement) => {
                 span.addEventListener("click", (e) => {
                     e.stopPropagation();
                     const rowId = span.getAttribute("data-id");
@@ -3323,7 +3344,7 @@ export class Visual implements IVisual {
         allRows.forEach((tr: HTMLElement, index: number) => {
             tr.addEventListener("click", (e) => {
                 // Ignore if clicked on expand icon (handled individually)
-                if ((e.target as HTMLElement).classList.contains("expand-icon")) return;
+                if ((e.target as HTMLElement).classList.contains("pnl-expand-icon")) return;
 
                 const rowId = tr.getAttribute("data-row-id");
                 if (rowId) {
@@ -3340,7 +3361,7 @@ export class Visual implements IVisual {
             // Keyboard Navigation
             tr.addEventListener("keydown", (e: KeyboardEvent) => {
                 // If focus is on the expand icon, let it handle the event (unless it's navigation)
-                const isIcon = (e.target as HTMLElement).classList.contains("expand-icon");
+                const isIcon = (e.target as HTMLElement).classList.contains("pnl-expand-icon");
 
                 if (e.key === "ArrowDown") {
                     e.preventDefault();

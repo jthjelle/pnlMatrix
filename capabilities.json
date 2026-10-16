@@ -155,6 +155,12 @@
         "layoutSettings": {
             "displayName": "Layout",
             "properties": {
+                "showColumnTotal": {
+                    "displayName": "Show Column Total",
+                    "type": {
+                        "bool": true
+                    }
+                },
                 "columnOrder": {
                     "displayName": "Column Order",
                     "type": {
@@ -285,6 +291,30 @@
                     "displayName": "Global Font Size",
                     "type": {
                         "integer": true
+                    }
+                },
+                "preserveEmptyRows": {
+                    "displayName": "Keep empty statement rows",
+                    "type": {
+                        "bool": true
+                    }
+                },
+                "missingAsZero": {
+                    "displayName": "Use zero for missing formula inputs",
+                    "type": {
+                        "bool": true
+                    }
+                },
+                "emptyCalculationAsZero": {
+                    "displayName": "Show zero when all formula inputs are empty",
+                    "type": {
+                        "bool": true
+                    }
+                },
+                "statementRows": {
+                    "displayName": "Fixed statement rows (JSON)",
+                    "type": {
+                        "text": true
                     }
                 }
             }
@@ -1091,11 +1121,21 @@
         {
             "matrix": {
                 "rows": {
+                    "dataReductionAlgorithm": {
+                        "top": {
+                            "count": 30000
+                        }
+                    },
                     "for": {
                         "in": "category"
                     }
                 },
                 "columns": {
+                    "dataReductionAlgorithm": {
+                        "top": {
+                            "count": 30000
+                        }
+                    },
                     "for": {
                         "in": "columns"
                     }
@@ -1127,6 +1167,11 @@
             }
         }
     ],
+    "drilldown": {
+        "roles": [
+            "category"
+        ]
+    },
     "supportsKeyboardFocus": true,
     "tooltips": {
         "supportedTypes": {

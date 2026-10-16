@@ -8,3 +8,4 @@ webpack.statistics.dev.html
 webpack.statistics.prod.html
 find_brace_error.js
 validate_json.js
+scenario-test-results.json

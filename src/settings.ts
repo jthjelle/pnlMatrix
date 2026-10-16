@@ -120,6 +120,9 @@ class RowHeaderSettings extends FormattingSettingsCard {
 
 
 class LayoutSettings extends FormattingSettingsCard {
+    public showColumnTotal = new formattingSettings.ToggleSwitch({
+        name: "showColumnTotal", displayName: "Show Column Total", value: false
+    });
     public globalFontSize = new formattingSettings.NumUpDown({
         name: "globalFontSize",
         displayName: "Global Font Size",
@@ -144,6 +147,19 @@ class LayoutSettings extends FormattingSettingsCard {
         name: "showGrandTotal",
         displayName: "Show Grand Total",
         value: false
+    });
+
+    public preserveEmptyRows = new formattingSettings.ToggleSwitch({
+        name: "preserveEmptyRows", displayName: "Keep empty statement rows", value: false
+    });
+    public missingAsZero = new formattingSettings.ToggleSwitch({
+        name: "missingAsZero", displayName: "Use zero for missing formula inputs", value: false
+    });
+    public emptyCalculationAsZero = new formattingSettings.ToggleSwitch({
+        name: "emptyCalculationAsZero", displayName: "Show zero when all formula inputs are empty", value: false
+    });
+    public statementRows = new formattingSettings.TextInput({
+        name: "statementRows", displayName: "Fixed statement rows (JSON)", value: "[]", placeholder: '[{"id":"Revenue","label":"Revenue"}]'
     });
 
     public rowOrder = new formattingSettings.TextInput({
@@ -248,6 +264,8 @@ class LayoutSettings extends FormattingSettingsCard {
     displayName: string = "Layout";
     public slices: FormattingSettingsSlice[] = [
         this.globalFontSize,
+        this.showColumnTotal,
+        this.preserveEmptyRows, this.missingAsZero, this.emptyCalculationAsZero, this.statementRows,
         this.invertAllValues, this.invertVarianceColors, this.positiveColor, this.negativeColor,
         this.showGrandTotal, this.grandTotalPosition, this.grandTotalLabel, this.iconStyle, this.disableExpandCollapse, this.enableSorting,
         this.rowPadding

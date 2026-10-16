@@ -8,6 +8,7 @@
   },
   "license": "MIT",
   "scripts": {
+    "test": "node test-scenarios.cjs && node test-bracket-rows.cjs && node test-partial-budget.cjs",
     "pbiviz": "pbiviz",
     "start": "pbiviz start",
     "package": "pbiviz package",
